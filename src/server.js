@@ -2,6 +2,9 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 
+// Import database to test connection on startup
+require("./config/database");
+
 const authRoutes = require("./routes/authRoutes");
 const subjectRoutes = require("./routes/subjectRoutes");
 const questionRoutes = require("./routes/questionRoutes");
@@ -30,8 +33,25 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Something went wrong!" });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+const server = app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
 });
 
-export default app;
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`❌ Port ${PORT} is already in use`);
+    console.error(`\nTo fix this, you can:`);
+    console.error(`  1. Kill the process using port ${PORT}:`);
+    console.error(`     lsof -ti:${PORT} | xargs kill -9`);
+    console.error(
+      `  2. Or use a different port by setting PORT in your .env file`
+    );
+    console.error(`     PORT=5001`);
+    process.exit(1);
+  } else {
+    console.error("❌ Server error:", err);
+    process.exit(1);
+  }
+});
+
+// export default app;

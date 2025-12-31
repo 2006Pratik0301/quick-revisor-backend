@@ -1,5 +1,6 @@
-const pool = require('../src/config/database');
+// Load environment variables FIRST before requiring database config
 require('dotenv').config();
+const pool = require('../src/config/database');
 
 const createTables = async () => {
   try {
