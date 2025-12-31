@@ -107,3 +107,26 @@ The server will run on `http://localhost:5000`
 - `POST /api/questions/subject/:subjectId` - Create new question (protected)
 - `PUT /api/questions/:id` - Update question (protected)
 - `DELETE /api/questions/:id` - Delete question (protected)
+
+---
+
+## Deploying to Vercel :rocket:
+
+This project is compatible with Vercel's Node serverless platform. The repository includes a `vercel.json` configuration that routes all requests to `src/server.js` and uses the `@vercel/node` builder.
+
+Quick steps:
+
+1. Create a new project on Vercel and connect your GitHub repository (or use the Vercel CLI).
+2. In the Vercel project settings, add the following environment variables:
+   - `DATABASE_URL` (or `NEON_DATABASE_URL`) — your Neon/Postgres connection string
+   - `JWT_SECRET` — your JWT secret
+   - `NODE_ENV=production`
+3. Deploy the project (Vercel will build using `@vercel/node`).
+
+Notes:
+
+- Migrations: Vercel deployments do not automatically run database migrations. Run `npm run migrate` locally (or via CI) against your Neon database before accepting traffic. You can run migrations from a CI workflow or a dedicated job runner.
+- Keep secrets out of the repository — set them in Vercel's Environment Variables.
+- If you need to run migrations as part of deployment, consider adding a GitHub Action or a one-off job to run `npm run migrate` against your database after deployment.
+
+If you want, I can add a simple GitHub Action that runs migrations after merges to `main` (optional).
