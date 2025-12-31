@@ -1,8 +1,8 @@
-const pool = require('../config/database');
+const { queryWithRetry } = require('../config/database');
 
 class Question {
   static async findBySubjectId(subjectId, userId) {
-    const result = await pool.query(
+    const result = await queryWithRetry(
       `SELECT q.* FROM questions q
        INNER JOIN subjects s ON q.subject_id = s.id
        WHERE q.subject_id = $1 AND s.user_id = $2
@@ -13,7 +13,7 @@ class Question {
   }
 
   static async findById(id, userId) {
-    const result = await pool.query(
+    const result = await queryWithRetry(
       `SELECT q.* FROM questions q
        INNER JOIN subjects s ON q.subject_id = s.id
        WHERE q.id = $1 AND s.user_id = $2`,
@@ -23,7 +23,7 @@ class Question {
   }
 
   static async create(subjectId, topic, questionText, answerText) {
-    const result = await pool.query(
+    const result = await queryWithRetry(
       'INSERT INTO questions (subject_id, topic, question_text, answer_text) VALUES ($1, $2, $3, $4) RETURNING *',
       [subjectId, topic, questionText, answerText]
     );
@@ -37,7 +37,7 @@ class Question {
       return null;
     }
 
-    const result = await pool.query(
+    const result = await queryWithRetry(
       'UPDATE questions SET topic = $1, question_text = $2, answer_text = $3 WHERE id = $4 RETURNING *',
       [topic, questionText, answerText, id]
     );
@@ -51,7 +51,7 @@ class Question {
       return null;
     }
 
-    const result = await pool.query(
+    const result = await queryWithRetry(
       'DELETE FROM questions WHERE id = $1 RETURNING *',
       [id]
     );

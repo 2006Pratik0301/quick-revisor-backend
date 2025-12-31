@@ -30,6 +30,23 @@ const login = async (req, res) => {
     });
   } catch (error) {
     console.error('Login error:', error);
+    
+    // Check if it's a connection error
+    const isConnectionError = 
+      error.message?.toLowerCase().includes('connection terminated') ||
+      error.message?.toLowerCase().includes('timeout') ||
+      error.code === 'ETIMEDOUT' ||
+      error.code === 'ECONNREFUSED' ||
+      error.code === 'ECONNRESET';
+    
+    if (isConnectionError) {
+      return res.status(503).json({ 
+        error: 'Database connection failed',
+        message: 'Unable to connect to the database. Please check your connection settings or use the connection pooler.',
+        details: 'See server logs for connection troubleshooting steps'
+      });
+    }
+    
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -64,6 +81,22 @@ const register = async (req, res) => {
     });
   } catch (error) {
     console.error('Registration error:', error);
+    
+    // Check if it's a connection error
+    const isConnectionError = 
+      error.message?.toLowerCase().includes('connection terminated') ||
+      error.message?.toLowerCase().includes('timeout') ||
+      error.code === 'ETIMEDOUT' ||
+      error.code === 'ECONNREFUSED' ||
+      error.code === 'ECONNRESET';
+    
+    if (isConnectionError) {
+      return res.status(503).json({ 
+        error: 'Database connection failed',
+        message: 'Unable to connect to the database. Please check your connection settings or use the connection pooler.'
+      });
+    }
+    
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -83,6 +116,22 @@ const verify = async (req, res) => {
     });
   } catch (error) {
     console.error('Verify error:', error);
+    
+    // Check if it's a connection error
+    const isConnectionError = 
+      error.message?.toLowerCase().includes('connection terminated') ||
+      error.message?.toLowerCase().includes('timeout') ||
+      error.code === 'ETIMEDOUT' ||
+      error.code === 'ECONNREFUSED' ||
+      error.code === 'ECONNRESET';
+    
+    if (isConnectionError) {
+      return res.status(503).json({ 
+        error: 'Database connection failed',
+        message: 'Unable to connect to the database. Please check your connection settings or use the connection pooler.'
+      });
+    }
+    
     res.status(500).json({ error: 'Internal server error' });
   }
 };

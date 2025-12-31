@@ -6,6 +6,22 @@ const getAllSubjects = async (req, res) => {
     res.json(subjects);
   } catch (error) {
     console.error('Get subjects error:', error);
+    
+    // Check if it's a connection error
+    const isConnectionError = 
+      error.message?.toLowerCase().includes('connection terminated') ||
+      error.message?.toLowerCase().includes('timeout') ||
+      error.code === 'ETIMEDOUT' ||
+      error.code === 'ECONNREFUSED' ||
+      error.code === 'ECONNRESET';
+    
+    if (isConnectionError) {
+      return res.status(503).json({ 
+        error: 'Database connection failed',
+        message: 'Unable to connect to the database. Please check your connection settings or use the connection pooler.'
+      });
+    }
+    
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -38,6 +54,23 @@ const createSubject = async (req, res) => {
     res.status(201).json(subject);
   } catch (error) {
     console.error('Create subject error:', error);
+    
+    // Check if it's a connection error
+    const isConnectionError = 
+      error.message?.toLowerCase().includes('connection terminated') ||
+      error.message?.toLowerCase().includes('timeout') ||
+      error.code === 'ETIMEDOUT' ||
+      error.code === 'ECONNREFUSED' ||
+      error.code === 'ECONNRESET';
+    
+    if (isConnectionError) {
+      return res.status(503).json({ 
+        error: 'Database connection failed',
+        message: 'Unable to connect to the database. Please check your connection settings or use the connection pooler.',
+        details: 'See server logs for connection troubleshooting steps'
+      });
+    }
+    
     res.status(500).json({ error: 'Internal server error' });
   }
 };

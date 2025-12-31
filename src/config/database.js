@@ -1,97 +1,194 @@
 const { Pool } = require("pg");
 
-// Validate required environment variables
-const requiredEnvVars = [
-  "SUPABASE_DB_HOST",
-  "SUPABASE_DB_USER",
-  "SUPABASE_DB_PASSWORD",
-  "SUPABASE_DB_NAME",
-  "SUPABASE_DB_PORT",
-];
+// The code below supports two database configuration styles:
+// 1) A single connection string via DATABASE_URL or NEON_DATABASE_URL (recommended for Neon)
+// 2) Individual SUPABASE_* env vars (legacy Supabase setup)
 
-const missingVars = requiredEnvVars.filter((varName) => !process.env[varName]);
+const connectionString =
+  process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || null;
 
-if (missingVars.length > 0) {
-  console.error(
-    "❌ Missing required environment variables:",
-    missingVars.join(", ")
+let pool;
+let usingConnectionString = false;
+
+if (connectionString) {
+  usingConnectionString = true;
+  console.log(
+    "🔗 Using database connection string from DATABASE_URL / NEON_DATABASE_URL"
   );
-  console.error(
-    "Please check your .env file and ensure all Supabase database credentials are set."
+  // Use connection string (Neon or other Postgres providers)
+  pool = new Pool({
+    connectionString,
+    ssl: { rejectUnauthorized: false },
+    // Pool tuning
+    max: parseInt(process.env.DB_MAX_CLIENTS, 10) || 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 20000,
+    allowExitOnIdle: false,
+  });
+} else {
+  // Fallback to Supabase-style individual env vars
+  const requiredEnvVars = [
+    "SUPABASE_DB_HOST",
+    "SUPABASE_DB_USER",
+    "SUPABASE_DB_PASSWORD",
+    "SUPABASE_DB_NAME",
+    "SUPABASE_DB_PORT",
+  ];
+
+  const missingVars = requiredEnvVars.filter(
+    (varName) => !process.env[varName]
   );
+
+  if (missingVars.length > 0) {
+    console.error(
+      "❌ Missing required environment variables:",
+      missingVars.join(", ")
+    );
+    console.error(
+      "Please check your .env file and ensure the database credentials are set."
+    );
+  }
+
+  const dbPort = parseInt(process.env.SUPABASE_DB_PORT, 10) || 5432;
+  const isPooler = dbPort === 6543;
+
+  const poolConfig = {
+    host: process.env.SUPABASE_DB_HOST,
+    user: process.env.SUPABASE_DB_USER,
+    password: process.env.SUPABASE_DB_PASSWORD,
+    database: process.env.SUPABASE_DB_NAME,
+    port: dbPort,
+    ssl: { rejectUnauthorized: false },
+    connectionTimeoutMillis: isPooler ? 30000 : 20000,
+    idleTimeoutMillis: 30000,
+    max: isPooler ? 10 : 10,
+    min: 0,
+    allowExitOnIdle: false,
+  };
+
+  if (isPooler) {
+    console.log("🔗 Using Supabase Connection Pooler (Transaction mode)");
+    console.log(`   Host: ${poolConfig.host}`);
+    console.log(`   Port: ${poolConfig.port}`);
+  } else {
+    console.log("🔗 Using Direct Supabase Connection");
+    console.log(`   Host: ${poolConfig.host}`);
+    console.log(`   Port: ${poolConfig.port}`);
+    console.log("   ⚠️  Note: Direct connection may require IP whitelisting");
+  }
+
+  pool = new Pool(poolConfig);
 }
 
-const pool = new Pool({
-  host: process.env.SUPABASE_DB_HOST,
-  user: process.env.SUPABASE_DB_USER,
-  password: process.env.SUPABASE_DB_PASSWORD,
-  database: process.env.SUPABASE_DB_NAME,
-  port: parseInt(process.env.SUPABASE_DB_PORT, 10) || 5432,
-  ssl: { rejectUnauthorized: false },
-  connectionTimeoutMillis: 10000, // 10 seconds
-  idleTimeoutMillis: 30000,
-  max: 20, // Maximum number of clients in the pool
-});
-
-// Test the connection
-pool.on("error", (err) => {
+// Improved error handling for pool connections
+pool.on("error", (err, client) => {
   console.error("❌ Unexpected error on idle client", err);
-  process.exit(-1);
+  if (client) {
+    client.end();
+  }
 });
 
-// Test connection on startup
-pool
-  .query("SELECT NOW()")
-  .then((res) => {
-    console.log("✅ Successfully connected to Supabase database");
-    console.log(`   Database time: ${res.rows[0].now}`);
-  })
-  .catch((err) => {
-    console.error("❌ Failed to connect to Supabase database:");
-    console.error(`   Error: ${err.message}`);
-    console.error(`   Code: ${err.code || 'N/A'}`);
-    
-    // Check for timeout errors by code or message
-    const isTimeoutError = 
-      err.code === 'ETIMEDOUT' || 
-      err.code === 'ECONNREFUSED' ||
-      err.message?.toLowerCase().includes('timeout') ||
-      err.message?.toLowerCase().includes('connection terminated');
-    
-    if (err.code === 'ENOTFOUND') {
-      console.error("\n🔧 Hostname not found. The pooler hostname might be incorrect.");
-      console.error("   Try using the direct connection instead:");
-      console.error("   SUPABASE_DB_HOST=db.strmdmijjuvolidhuupw.supabase.co");
-      console.error("   SUPABASE_DB_PORT=5432");
-      console.error("   Then add your IP to Supabase allowlist in Dashboard > Settings > Database");
-    } else if (isTimeoutError) {
-      console.error("\n🔧 Connection timeout detected. Try these solutions:");
-      console.error("\n   1. ⚡ USE CONNECTION POOLER (Recommended - No IP whitelist needed):");
-      console.error("      Get the correct pooler hostname from:");
-      console.error("      Supabase Dashboard > Settings > Database > Connection Pooling");
-      console.error("      Look for 'Transaction' or 'Session' mode connection string");
-      console.error("\n   2. 📍 Add your IP to Supabase allowlist:");
-      console.error("      - Go to Supabase Dashboard > Settings > Database");
-      console.error("      - Find 'Connection Pooling' or 'Allowed IPs' section");
-      console.error("      - Add your current IP or enable 'Allow all IPs'");
-      console.error("\n   3. 🔍 Verify your connection settings:");
-      console.error(`      Host: ${process.env.SUPABASE_DB_HOST || '❌ NOT SET'}`);
-      console.error(`      Port: ${process.env.SUPABASE_DB_PORT || '❌ NOT SET'}`);
-      console.error(`      Database: ${process.env.SUPABASE_DB_NAME || '❌ NOT SET'}`);
-      console.error(`      User: ${process.env.SUPABASE_DB_USER || '❌ NOT SET'}`);
-      console.error("\n   4. ⏸️  Check if your Supabase project is paused:");
-      console.error("      - Free tier projects pause after inactivity");
-      console.error("      - Go to Supabase Dashboard and wake it up");
-      console.error("\n   5. 🌐 Network/Firewall issues:");
-      console.error("      - Check if your firewall is blocking port 5432 or 6543");
-      console.error("      - Try from a different network to rule out ISP blocking");
-    } else {
-      console.error("\nPlease check:");
-      console.error("   1. Your .env file has all required variables");
-      console.error("   2. Your Supabase database is running");
-      console.error("   3. Your connection credentials are correct");
-      console.error("   4. Your IP is allowed in Supabase connection settings");
+pool.on("connect", (client) => {
+  // console.log("✅ New client connected to database");
+});
+
+pool.on("remove", (client) => {
+  // console.log("🔌 Client removed from pool");
+});
+
+async function queryWithRetry(text, params, retries = 2) {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await pool.query(text, params);
+    } catch (err) {
+      const msg = (err.message || "").toLowerCase();
+      const isConnectionError =
+        msg.includes("connection terminated") ||
+        msg.includes("timeout") ||
+        msg.includes("connection closed") ||
+        err.code === "ETIMEDOUT" ||
+        err.code === "ECONNREFUSED" ||
+        err.code === "ECONNRESET" ||
+        err.code === "57P01";
+
+      if (isConnectionError && i < retries) {
+        const delay = Math.min(1000 * Math.pow(2, i), 5000);
+        console.warn(
+          `⚠️  Connection error, retrying query (${
+            i + 1
+          }/${retries}) after ${delay}ms...`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        continue;
+      }
+
+      throw err;
     }
-  });
+  }
+}
 
 module.exports = pool;
+module.exports.queryWithRetry = queryWithRetry;
+
+// Test connection on startup with retry logic
+let retryCount = 0;
+const maxRetries = 3;
+const retryDelay = 2000; // 2 seconds
+
+async function testConnection() {
+  try {
+    const res = await pool.query("SELECT NOW()");
+    if (usingConnectionString) {
+      console.log(
+        "✅ Successfully connected using DATABASE_URL/NEON_DATABASE_URL"
+      );
+    } else {
+      console.log("✅ Successfully connected to Supabase database");
+    }
+    console.log(`   Database time: ${res.rows[0].now}`);
+  } catch (err) {
+    retryCount++;
+
+    console.error("❌ Failed to connect to database:");
+    console.error(`   Error: ${err.message}`);
+    console.error(`   Code: ${err.code || "N/A"}`);
+
+    const isTimeoutError =
+      err.code === "ETIMEDOUT" ||
+      err.code === "ECONNREFUSED" ||
+      err.code === "ECONNRESET" ||
+      (err.message || "").toLowerCase().includes("timeout") ||
+      (err.message || "").toLowerCase().includes("connection terminated") ||
+      (err.message || "").toLowerCase().includes("connection closed");
+
+    if (isTimeoutError && retryCount < maxRetries) {
+      console.error(
+        `\n   🔄 Retrying connection (${retryCount}/${maxRetries})...`
+      );
+      await new Promise((resolve) => setTimeout(resolve, retryDelay));
+      return testConnection();
+    }
+
+    // Helpful tips depending on environment
+    if (connectionString) {
+      console.error(
+        "\n🔧 Check your DATABASE_URL / NEON_DATABASE_URL and ensure it is correct and includes SSL settings (e.g. sslmode=require or provide SSL in client)."
+      );
+      console.error(
+        "      Example: postgres://<user>:<password>@<host>:5432/<db>?sslmode=require"
+      );
+    } else {
+      console.error(
+        "\n🔧 Check your Supabase settings: ensure host, port, user, password are correct and your IP is allowed if using direct connection."
+      );
+      console.error(
+        "      Consider using Connection Pooler (port 6543) to avoid IP allowlist requirements."
+      );
+    }
+
+    // Don't exit - allow app to start and handle errors gracefully
+  }
+}
+
+// Test connection asynchronously (non-blocking)
+testConnection();

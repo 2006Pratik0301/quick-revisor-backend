@@ -1,8 +1,8 @@
-const pool = require('../config/database');
+const { queryWithRetry } = require('../config/database');
 
 class Subject {
   static async findByUserId(userId) {
-    const result = await pool.query(
+    const result = await queryWithRetry(
       'SELECT * FROM subjects WHERE user_id = $1 ORDER BY created_at DESC',
       [userId]
     );
@@ -10,7 +10,7 @@ class Subject {
   }
 
   static async findById(id, userId) {
-    const result = await pool.query(
+    const result = await queryWithRetry(
       'SELECT * FROM subjects WHERE id = $1 AND user_id = $2',
       [id, userId]
     );
@@ -18,7 +18,7 @@ class Subject {
   }
 
   static async create(userId, year, name, relatedQuestion) {
-    const result = await pool.query(
+    const result = await queryWithRetry(
       'INSERT INTO subjects (user_id, year, name, related_question) VALUES ($1, $2, $3, $4) RETURNING *',
       [userId, year, name, relatedQuestion]
     );
@@ -26,7 +26,7 @@ class Subject {
   }
 
   static async update(id, userId, year, name, relatedQuestion) {
-    const result = await pool.query(
+    const result = await queryWithRetry(
       'UPDATE subjects SET year = $1, name = $2, related_question = $3 WHERE id = $4 AND user_id = $5 RETURNING *',
       [year, name, relatedQuestion, id, userId]
     );
@@ -34,7 +34,7 @@ class Subject {
   }
 
   static async delete(id, userId) {
-    const result = await pool.query(
+    const result = await queryWithRetry(
       'DELETE FROM subjects WHERE id = $1 AND user_id = $2 RETURNING *',
       [id, userId]
     );
